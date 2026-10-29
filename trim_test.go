@@ -118,6 +118,28 @@ func TestFinalNewlineIsNotALine(t *testing.T) {
 	}
 }
 
+// A CRLF context gets CRLF markers, so the output never mixes line endings.
+func TestCRLFMarkers(t *testing.T) {
+	lines := strings.Split("a\r\nb\r\nc\r\nd\r\n", "\n")
+	p := Policy{Floor: 1, TopK: 1}
+	if out, _ := p.Apply(lines, []float64{1, 0, 0, 0, 0}); out != "a\r\n… 3 lines …\r\n" {
+		t.Errorf("got %q", out)
+	}
+	// Without a final newline the last marker is unterminated, like a last kept line.
+	if out, _ := p.Apply(strings.Split("a\r\nb\r\nc", "\n"), []float64{1, 0, 0}); out != "a\r\n… 2 lines …" {
+		t.Errorf("got %q", out)
+	}
+	res := Compress(strings.ReplaceAll(logContext(), "\n", "\r\n"), logQuery, Options{})
+	if res.Unchanged {
+		t.Fatalf("CRLF log context returned unchanged: %s", res.Reason)
+	}
+	for _, line := range strings.Split(strings.TrimSuffix(res.Output, "\n"), "\n") {
+		if !strings.HasSuffix(line, "\r") {
+			t.Fatalf("line %q does not end in CRLF", line)
+		}
+	}
+}
+
 func TestGolden(t *testing.T) {
 	got := Compress(logContext(), logQuery, Options{}).Output
 	path := "testdata/golden.txt"
