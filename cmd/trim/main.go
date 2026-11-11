@@ -19,8 +19,9 @@ import (
 func main() {
 	query := flag.String("query", "", "the current ask (required)")
 	point := flag.String("point", trim.DefaultPoint, "operating point: conservative, balanced or aggressive")
+	maxBytes := flag.Int("max-bytes", 0, "cap the output at this many bytes (0: no cap)")
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: trim --query QUERY [--point POINT] [FILE]   (reads stdin without FILE)")
+		fmt.Fprintln(os.Stderr, "usage: trim --query QUERY [--point POINT] [--max-bytes N] [FILE]   (reads stdin without FILE)")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -30,6 +31,10 @@ func main() {
 	}
 	if _, ok := trim.Points[*point]; !ok {
 		fmt.Fprintf(os.Stderr, "trim: unknown point %q\n", *point)
+		os.Exit(2)
+	}
+	if *maxBytes < 0 {
+		fmt.Fprintf(os.Stderr, "trim: negative --max-bytes %d\n", *maxBytes)
 		os.Exit(2)
 	}
 
@@ -51,7 +56,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	res := trim.Compress(string(context), *query, trim.Options{Point: *point})
+	res := trim.Compress(string(context), *query, trim.Options{Point: *point, MaxBytes: *maxBytes})
 	if _, err := os.Stdout.WriteString(res.Output); err != nil {
 		fmt.Fprintln(os.Stderr, "trim:", err)
 		os.Exit(1)

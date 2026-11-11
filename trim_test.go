@@ -89,6 +89,34 @@ func TestRefusals(t *testing.T) {
 	}
 }
 
+func TestMaxBytes(t *testing.T) {
+	ctx := logContext()
+	full := Compress(ctx, logQuery, Options{})
+	if res := Compress(ctx, logQuery, Options{MaxBytes: len(full.Output)}); res.Output != full.Output {
+		t.Errorf("a cap the point's output fits changed it:\n%s", res.Output)
+	}
+
+	const limit = 400 // under the point's output, over the three best lines with their context
+	res := Compress(ctx, logQuery, Options{MaxBytes: limit})
+	if res.Unchanged || len(res.Output) > limit {
+		t.Fatalf("want at most %d bytes, got %d (unchanged=%v %s)", limit, len(res.Output), res.Unchanged, res.Reason)
+	}
+	if !strings.Contains(res.Output, "ledger-db timeout") {
+		t.Fatalf("the error line the query asks for was dropped:\n%s", res.Output)
+	}
+
+	// A forced cut ignores MinCut.
+	strict := Points[DefaultPoint]
+	strict.MinCut = 1
+	if res := Compress(ctx, logQuery, Options{Policy: &strict, MaxBytes: limit}); res.Unchanged {
+		t.Errorf("a forced cut returned unchanged: %s", res.Reason)
+	}
+
+	if res := Compress(ctx, logQuery, Options{MaxBytes: 10}); !res.Unchanged || res.Reason != "no selection fits in the byte cap" {
+		t.Errorf("want the input back unchanged for a cap nothing fits, got unchanged=%v reason=%q", res.Unchanged, res.Reason)
+	}
+}
+
 // Only the query's last 8 KiB count: text before it changes nothing.
 func TestQueryCap(t *testing.T) {
 	ctx := logContext()

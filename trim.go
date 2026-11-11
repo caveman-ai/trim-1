@@ -13,6 +13,7 @@ package trim
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"slices"
 	"strings"
@@ -74,6 +75,10 @@ type Options struct {
 	Point string
 	// Policy, when set, replaces the named point (for tuning and frontiers).
 	Policy *Policy
+	// MaxBytes, when above zero, caps the output's size. An output over it
+	// keeps fewer of the best-scoring lines until it fits; when even TopK
+	// lines do not fit, the context comes back unchanged.
+	MaxBytes int
 }
 
 // Result is the outcome of one Compress call.
@@ -124,7 +129,15 @@ func Compress(context, query string, opts Options) Result {
 		return unchanged(context, name, policy, err.Error())
 	}
 	out, kept := policy.Apply(lines, scores)
-	if float64(len(out)) > float64(len(context))*(1-policy.MinCut) {
+	if opts.MaxBytes > 0 && len(context) > opts.MaxBytes {
+		// The cap forces the cut, so MinCut does not apply.
+		if len(out) > opts.MaxBytes {
+			out, kept = policy.fit(lines, scores, opts.MaxBytes)
+		}
+		if len(out) > opts.MaxBytes {
+			return unchanged(context, name, policy, "no selection fits in the byte cap")
+		}
+	} else if float64(len(out)) > float64(len(context))*(1-policy.MinCut) {
 		return unchanged(context, name, policy, "cut below the minimum")
 	}
 	return Result{Output: out, KeptLines: kept, RemovedLines: lineCount(context) - kept, Point: name, Policy: policy}
@@ -174,6 +187,27 @@ func (p Policy) Apply(lines []string, scores []float64) (string, int) {
 	out, kept := render(lines, selectLines(scores, blank, indent, section, p), crlf, final)
 	if final {
 		out += "\n"
+	}
+	return out, kept
+}
+
+// fit keeps as many of the best-scoring lines as fit in maxBytes, and never
+// fewer than TopK. Lines are seeded by rank alone, so TopK sets how many.
+// Output size does not grow strictly with TopK (gap filling varies), so the
+// search returns a selection that fits, not always the largest one.
+func (p Policy) fit(lines []string, scores []float64, maxBytes int) (string, int) {
+	p.Floor = math.Inf(1)
+	out, kept := p.Apply(lines, scores)
+	if len(out) > maxBytes {
+		return out, kept
+	}
+	for lo, hi := p.TopK, len(lines)+1; hi-lo > 1; {
+		p.TopK = (lo + hi) / 2
+		if o, k := p.Apply(lines, scores); len(o) <= maxBytes {
+			out, kept, lo = o, k, p.TopK
+		} else {
+			hi = p.TopK
+		}
 	}
 	return out, kept
 }
