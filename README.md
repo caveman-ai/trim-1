@@ -74,6 +74,15 @@ line is one the model can no longer read.
 The [model card](https://huggingface.co/caveman-so/trim-1#which-setting-to-use)
 has the numbers behind this.
 
+`--max-bytes` (`Options.MaxBytes`) caps the output's size, markers included.
+When the point's output is over the cap, trim-1 keeps fewer of the
+best-scoring lines until it fits. It is bytes, not tokens: estimate about four
+bytes a token.
+
+```bash
+trim --query "why does the build fail" --max-bytes 4000 build.log
+```
+
 ## When it does nothing
 
 trim-1 fails closed. It returns the context unchanged, and says why on stderr,
@@ -83,10 +92,12 @@ when:
 - the context is under 2,000 bytes,
 - the context is over 8 MiB or 200,000 lines,
 - the context already has a removal marker line, such as trim-1's own output,
-- the cut would remove less than 10% of the bytes.
+- the cut would remove less than 10% of the bytes (unless `--max-bytes`
+  forces it),
+- even the three best lines do not fit in `--max-bytes`.
 
-The `trim` command exits with status 2 on a missing `--query` or an unknown
-`--point`. Flags go before the file name.
+The `trim` command exits with status 2 on a missing `--query`, an unknown
+`--point` or a negative `--max-bytes`. Flags go before the file name.
 
 ## Test
 
