@@ -1,0 +1,5 @@
+# TestGolden compares this fixture byte for byte against output built from
+# "\n"-joined lines, so it must be checked out exactly as committed. Without
+# this, a Windows checkout with the default core.autocrlf=true gets CRLF and
+# TestGolden fails before the code runs.
+testdata/golden.txt text eol=lf
